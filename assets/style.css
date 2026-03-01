@@ -1,0 +1,242 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Wendy+One&display=swap');
+/* =====================================
+   ROOT APP
+=====================================*/
+:root{
+    --text-color:#f49f17;
+    --dark-bg:#212121;
+    --sidebar-bg:#323232;
+    --text-font:"Fira Sans", sans-serif;
+    --sub-text:#dddddd;
+}
+.stApp {
+    background: var(--dark-bg);
+    font-family: "Wendy One", sans-serif;
+    color: 	var(--text-color);
+}
+.stAppHeader{
+    background-color: var(--dark-bg);
+}
+
+/* Global container polish */
+.block-container {
+    padding-top: 0.5rem;
+    max-width: 92%;
+}
+[data-testid="stMarkdownContainer"] hr {
+    margin:-5px 0 10px 0;
+}
+
+/* =====================================
+   SIDEBAR
+=====================================*/
+
+[data-testid="stAppToolbar"] {
+    background: #3766c5;
+}
+
+[data-testid="stSidebar"] {
+    background-color: var(--sidebar-bg);
+    font-family: var(--text-font);
+    padding:0 4px;
+    border-right: 1px solid #444;
+    box-shadow: 3px 0px 10px rgba(0,0,0,0.4);
+    scroll-behavior: smooth;
+}
+.stElementContainer h1{
+    margin-top:-15px;
+    font-size:22px;
+    color:var(--text-color);
+}
+.stElementContainer p{
+    font-size:14px;
+    color:var(--text-color);
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] hr {
+    margin:-5px 0 20px 0;
+}
+
+.stSelectbox > div > div{
+    border:1px solid #4d4d4d;
+    box-shadow: 0 2px 5px #3b3b3bc5;
+    background-color: var(--sidebar-bg);
+}  
+
+/* KPI METRICS */
+
+[data-testid="stMetric"] {
+    border-radius: 8px;
+    border:1px solid #4d4d4d;
+    box-shadow: 0 2px 5px #3b3b3bc5;
+    padding:10px;
+}
+
+[data-testid="stMetricValue"]  {
+    color:var(--sub-text);
+    font-size:22px;
+    font-weight: bold;
+    margin:2px 0;
+}
+[data-testid="stMetricDelta"]  {
+    font-weight:bold;
+}
+
+/* Page Title */
+
+div.st-key-app_title div.stHeading h1{
+    color: var(--text-color);
+    text-align: center;
+    font-family: var(--text-font);
+    font-size: 30px;
+}
+/* tabs */
+[data-baseweb="tab-highlight"] {
+    background-color: var(--text-color);
+    transition: all 0.3s ease-in-out;
+}
+[data-baseweb="tab-list"] [aria-selected="true"]{
+    color:var(--text-color);
+    transition: color 0.3s ease-in-out;
+}
+[data-baseweb="tab"] p {
+    padding:0 10px;
+    transition: all 0.3s ease;
+}
+[data-baseweb="tab"]:hover{
+    background-color:var(--text-color);
+    color:var(--sub-text);
+    transform: translateY(-2px);
+    transition: all 0.25s ease-in-out;
+}
+[data-baseweb="tab"] {
+    transition: 
+        background-color 0.3s ease,
+        color 0.3s ease,
+        transform 0.2s ease;
+}
+/* DATAFRAMES */
+
+[data-testid="stDataFrame"] > div > div{
+    overflow: hidden;
+    padding: 10px 0;
+    border-radius: 0px;
+}
+
+/* HEADERS */
+
+.stHeading h3{
+    color: var(--sub-text);
+    font-family: "Fira Sans", sans-serif;
+    font-size : 20px;
+    padding:0 15px;
+    margin:20px 0 0 0;
+}
+[data-testid="stMarkdownContainer"] h4{
+    color: var(--sub-text);
+    font-family: "Fira Sans", sans-serif;
+    font-size : 18px;
+    padding:0 15px;
+    margin:20px 15px;
+}
+/* Checkbox */
+div.st-key-price-action-options{
+    padding:5px 20px;
+}
+div.st-key-price-action-options span{
+    background-color: var(--text-color);
+}
+
+div.st-key-price-action-options input[type="checkbox"] {
+    color: var(--sub-text);
+    transform: scale(1.1);
+}
+
+div.st-key-price-action-options p {
+    font-weight: 500;
+    color:var(--sub-text)
+}
+
+/* CPR STRIP */
+.cpr-strip {
+    padding: 12px 18px;
+}
+
+span[style*="blue"] {
+    text-shadow: 0 0 2px rgba(0,150,255,0.5);
+}
+
+span[style*="green"] {
+    text-shadow: 0 0 2px rgba(0,255,120,0.5);
+}
+
+span[style*="red"] {
+    text-shadow: 0 0 2px rgba(255,60,60,0.5);
+}
+
+/* Plotly Chart Container */
+/* Remove internal plot scrolling */
+[data-testid="stPlotlyChart"] {
+    overflow: hidden !important;
+}
+
+/* Remove extra vertical scroll in app */
+html, body {
+    overflow-x: hidden;
+}
+
+/* Give plot proper height */
+.js-plotly-plot {
+    height: 80vh !important;   /* adjust if needed */
+}
+.js-plotly-plot{
+    padding: 15px 20px;
+    border-radius: 14px;
+    border: 1px solid #3a3a3a;
+    background: #2C2B2B;
+    box-shadow: 0 0 5px rgba(0,0,0,0.45);
+}
+.js-plotly-plot > div{
+    margin-bottom: 25px;
+    overflow:scroll;
+}
+[data-testid="stPlotlyChart"] {
+    animation: fadeChart 0.5s ease-in;
+}
+
+@keyframes fadeChart {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.js-plotly-plot .legend text {
+    font-size: 12px !important;
+    fill: #dddddd !important;
+}
+
+.js-plotly-plot .legend{
+    background-color: rgba(0,0,0,0.3) !important;
+}
+/* Smooth UI */
+
+* {
+    transition: all 0.18s ease;
+}
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #2a2a2a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--text-color);
+    border-radius: 6px;
+}
+.stApp {
+    animation: fadeIn 0.6s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
