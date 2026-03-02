@@ -5,25 +5,32 @@ from dotenv import load_dotenv
 import os
 import streamlit as st
 
+# Interval Map for fetching specific candles
 INTERVAL_MAP = {
     "5m": Client.KLINE_INTERVAL_5MINUTE,
     "15m": Client.KLINE_INTERVAL_15MINUTE,
     "1h": Client.KLINE_INTERVAL_1HOUR
 }
+# Load the specific keys
 load_dotenv()
 
-def get_secret(key):
+def get_client():
     try:
-        return st.secrets[key]   # Cloud
+        api_key = st.secrets["BINANCE_KEY"]
+        api_secret = st.secrets["BINANCE_SECRET"]
     except:
-        return os.getenv(key)    # Local
+        api_key = os.getenv("BINANCE_KEY")
+        api_secret = os.getenv("BINANCE_SECRET")
 
-api_key = get_secret("BINANCE_KEY")
-api_secret = get_secret("BINANCE_SECRET")
+    if not api_key or not api_secret:
+        raise ValueError("Binance API keys not found.")
 
-client = Client(api_key, api_secret)
+    return Client(api_key, api_secret)
+
 # Getting data from API
 def get_data_from_api(timeframe):
+    client = get_client()
+    
     print(timeframe)
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=7)
