@@ -16,11 +16,11 @@ load_dotenv()
 
 def get_client():
     try:
-        api_key = st.secrets["BINANCE_KEY"]
-        api_secret = st.secrets["BINANCE_SECRET"]
+        api_key = st.secrets["BINANCE_API_KEY"]
+        api_secret = st.secrets["BINANCE_SECRET_KEY"]
     except:
-        api_key = os.getenv("BINANCE_KEY")
-        api_secret = os.getenv("BINANCE_SECRET")
+        api_key = os.getenv("BINANCE_API_KEY")
+        api_secret = os.getenv("BINANCE_SECRET_KEY")
 
     if not api_key or not api_secret:
         raise ValueError("Binance API keys not found.")
