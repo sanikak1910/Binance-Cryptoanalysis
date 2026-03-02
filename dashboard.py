@@ -14,13 +14,15 @@ import os
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
+# Autorefresh the app after 5seconds
 st_autorefresh(interval=5000, key="live_refresh")
 
 css_path = os.path.join(os.path.dirname(__file__), "assets\style.css")
 
 with open(css_path) as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-   
+
+# Main Page
 st.set_page_config(
     page_title= "BTC/USD Dashboard",
     page_icon= ":material/currency_bitcoin:",
@@ -224,7 +226,7 @@ fig = make_subplots(
     subplot_titles=("Price Action", "RSI (14)")
 )
 
-# Candlestick
+
 fig.add_trace(go.Candlestick(
     x=technical_df["timestamp"],
     open=technical_df["open"],
@@ -236,6 +238,7 @@ fig.add_trace(go.Candlestick(
     decreasing_line_color="#ff5252"
 ), row=1, col=1)
 
+# Candlestick for Technical Analysis for BTCUSDT
 # Moving Averages
 
 fig.add_trace(go.Scatter(

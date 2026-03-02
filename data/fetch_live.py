@@ -27,11 +27,11 @@ def get_client():
 
     return Client(api_key, api_secret)
 
-# Getting data from API
+client = get_client()
+
+# Getting latest data from API
 def get_data_from_api(timeframe):
-    client = get_client()
-    
-    print(timeframe)
+    # print(timeframe)
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=7)
 
