@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import os
+import streamlit as st
 
 INTERVAL_MAP = {
     "5m": Client.KLINE_INTERVAL_5MINUTE,
@@ -10,9 +11,15 @@ INTERVAL_MAP = {
     "1h": Client.KLINE_INTERVAL_1HOUR
 }
 load_dotenv()
-   
-api_key = os.getenv("BINANCE_API_KEY")
-api_secret = os.getenv("BINANCE_SECRET_KEY")
+
+def get_secret(key):
+    try:
+        return st.secrets[key]   # Cloud
+    except:
+        return os.getenv(key)    # Local
+
+api_key = get_secret("BINANCE_KEY")
+api_secret = get_secret("BINANCE_SECRET")
 
 client = Client(api_key, api_secret)
 # Getting data from API
