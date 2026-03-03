@@ -1,44 +1,27 @@
 from binance.client import Client
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
-import os
-import streamlit as st
 
-# Interval Map for fetching specific candles
+# -----------------------------
+# Initialize Binance Client
+# (No API key required for public data)
+# -----------------------------
+client = Client()
+
+# -----------------------------
+# Interval Map
+# -----------------------------
 INTERVAL_MAP = {
     "5m": Client.KLINE_INTERVAL_5MINUTE,
     "15m": Client.KLINE_INTERVAL_15MINUTE,
     "1h": Client.KLINE_INTERVAL_1HOUR
 }
 
-load_dotenv()
-
-# def get_client():
-    # api_key = None
-    # api_secret = None
-
-    # # Try Streamlit secrets first
-    # if hasattr(st, "secrets"):
-    #     api_key = st.secrets.get("BINANCE_API_KEY")
-    #     api_secret = st.secrets.get("BINANCE_API_SECRET")
-    # else:
-    #     raise ValueError("Binance API keys not found.")
-    
-    # # Fallback to .env
-    # if not api_key or not api_secret:
-    #     api_key = os.getenv("BINANCE_API_KEY")
-    #     api_secret = os.getenv("BINANCE_API_SECRET")    
-    # else:
-    #     raise ValueError("Binance API keys not found.")
-
-    # return Client(api_key, api_secret)
-
-client = Client()
-
-# Getting latest data from API
+# -----------------------------
+# Get 7 days historical data
+# -----------------------------
 def get_data_from_api(timeframe):
-    # print(timeframe)
+
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=7)
 
@@ -62,33 +45,39 @@ def get_data_from_api(timeframe):
             break
 
         all_klines.extend(klines)
-
         last_open_time = klines[-1][0]
 
-        # Move start forward to avoid duplicates
+        # Move forward to avoid duplicates
         fetch_start = last_open_time + 1
 
-        # Stop when we've reached end
         if last_open_time >= end_ms:
             break
 
-    df = klines_to_df(all_klines)
-    return df
+    return klines_to_df(all_klines)
 
+
+# -----------------------------
+# Fetch new candles after last timestamp
+# -----------------------------
 def fetch_latest_candles(timeframe, last_ts):
-    start_ms = int(last_ts.timestamp()*1000)+1
-    
+
+    start_ms = int(last_ts.timestamp() * 1000) + 1
+
     klines = client.get_historical_klines(
-        symbol = "BTCUSDT",
-        interval = INTERVAL_MAP[timeframe],
-        start_str = start_ms
+        symbol="BTCUSDT",
+        interval=INTERVAL_MAP[timeframe],
+        start_str=start_ms
     )
+
     if not klines:
         return None
+
     return klines_to_df(klines)
 
 
-# Getting the required data for analysis
+# -----------------------------
+# Convert Klines to DataFrame
+# -----------------------------
 def klines_to_df(klines):
 
     df_sample = pd.DataFrame(klines, columns=[
@@ -96,16 +85,17 @@ def klines_to_df(klines):
         'close_time', 'quote_asset_volume', 'num_trades',
         'taker_buy_base', 'taker_buy_quote', 'ignore'
     ])
-    # Slicing only necessary values
-    df_sample = df_sample.iloc[:,:6]
-    
-    df_sample['timestamp'] = (
-    pd.to_datetime(df_sample['timestamp'], unit='ms')
-    .dt.tz_localize('UTC')
-    .dt.tz_convert('Asia/Kolkata')
-    .dt.tz_localize(None)   # remove +05:30
-)
 
-    df_sample[['open', 'close', 'low', 'high', 'volume']]  =  df_sample[['open', 'close', 'low', 'high', 'volume']].astype(float)
-    print(df_sample)
+    df_sample = df_sample.iloc[:, :6]
+
+    df_sample['timestamp'] = (
+        pd.to_datetime(df_sample['timestamp'], unit='ms')
+        .dt.tz_localize('UTC')
+        .dt.tz_convert('Asia/Kolkata')
+        .dt.tz_localize(None)
+    )
+
+    df_sample[['open', 'close', 'low', 'high', 'volume']] = \
+        df_sample[['open', 'close', 'low', 'high', 'volume']].astype(float)
+
     return df_sample
