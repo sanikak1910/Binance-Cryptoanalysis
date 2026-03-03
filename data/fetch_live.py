@@ -11,18 +11,25 @@ INTERVAL_MAP = {
     "15m": Client.KLINE_INTERVAL_15MINUTE,
     "1h": Client.KLINE_INTERVAL_1HOUR
 }
-# Load the specific keys
+
 load_dotenv()
 
 def get_client():
-    try:
-        api_key = st.secrets["BINANCE_API_KEY"]
-        api_secret = st.secrets["BINANCE_SECRET_KEY"]
-    except:
-        api_key = os.getenv("BINANCE_API_KEY")
-        api_secret = os.getenv("BINANCE_SECRET_KEY")
+    api_key = None
+    api_secret = None
 
+    # Try Streamlit secrets first
+    if hasattr(st, "secrets"):
+        api_key = st.secrets.get("BINANCE_API_KEY")
+        api_secret = st.secrets.get("BINANCE_API_SECRET")
+    else:
+        raise ValueError("Binance API keys not found.")
+    
+    # Fallback to .env
     if not api_key or not api_secret:
+        api_key = os.getenv("BINANCE_API_KEY")
+        api_secret = os.getenv("BINANCE_API_SECRET")    
+    else:
         raise ValueError("Binance API keys not found.")
 
     return Client(api_key, api_secret)
