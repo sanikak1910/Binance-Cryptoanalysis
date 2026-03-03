@@ -14,27 +14,27 @@ INTERVAL_MAP = {
 
 load_dotenv()
 
-def get_client():
-    api_key = None
-    api_secret = None
+# def get_client():
+    # api_key = None
+    # api_secret = None
 
-    # Try Streamlit secrets first
-    if hasattr(st, "secrets"):
-        api_key = st.secrets.get("BINANCE_API_KEY")
-        api_secret = st.secrets.get("BINANCE_API_SECRET")
-    else:
-        raise ValueError("Binance API keys not found.")
+    # # Try Streamlit secrets first
+    # if hasattr(st, "secrets"):
+    #     api_key = st.secrets.get("BINANCE_API_KEY")
+    #     api_secret = st.secrets.get("BINANCE_API_SECRET")
+    # else:
+    #     raise ValueError("Binance API keys not found.")
     
-    # Fallback to .env
-    if not api_key or not api_secret:
-        api_key = os.getenv("BINANCE_API_KEY")
-        api_secret = os.getenv("BINANCE_API_SECRET")    
-    else:
-        raise ValueError("Binance API keys not found.")
+    # # Fallback to .env
+    # if not api_key or not api_secret:
+    #     api_key = os.getenv("BINANCE_API_KEY")
+    #     api_secret = os.getenv("BINANCE_API_SECRET")    
+    # else:
+    #     raise ValueError("Binance API keys not found.")
 
-    return Client(api_key, api_secret)
+    # return Client(api_key, api_secret)
 
-client = get_client()
+client = Client()
 
 # Getting latest data from API
 def get_data_from_api(timeframe):
