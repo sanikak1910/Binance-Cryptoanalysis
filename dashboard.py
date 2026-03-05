@@ -17,7 +17,10 @@ import plotly.graph_objects as go
 # Autorefresh the app after 5seconds
 st_autorefresh(interval=5000, key="live_refresh")
 
-css_path = os.path.join(os.path.dirname(__file__), "assets\style.css")
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+css_path = os.path.join(BASE_DIR, "assets", "style.css")
 
 with open(css_path) as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
