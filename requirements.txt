@@ -7,3 +7,4 @@ python-dotenv
 python-binance
 ta
 streamlit-autorefresh
+websocket-client

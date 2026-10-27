@@ -1,337 +1,747 @@
-import pandas as pd
-import streamlit as st
-import plotly.graph_objs as go
-import plotly.express as px
-import time 
-from logic.technical_engine import(
-    add_cpr_points, add_technical_parameters
-)
-from logic.strategy_engine import generate_signals
-from logic.tracker import track_last_hit_and_profits
-from data.fetch_live import get_data_from_api,fetch_latest_candles
-from streamlit_autorefresh import st_autorefresh
+import logging
 import os
-from plotly.subplots import make_subplots
+
+import pandas as pd
 import plotly.graph_objects as go
+import streamlit as st
 
-# Autorefresh the app after 5seconds
-st_autorefresh(interval=5000, key="live_refresh")
+from data.fetch_live import (
+    get_data_from_api,
+    fetch_latest_candles,
+    update_candle,
+    merge_candles,
+)
+from data.websocket_client import BinanceKlineFeed
+from logic.technical_engine import (
+    add_cpr_points,
+    add_technical_parameters,
+)
 
-css_path = os.path.join(os.path.dirname(__file__), "assets/style.css")
+# =========================================================
+# CONFIGURATION
+# =========================================================
 
-with open(css_path) as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-# Main Page
 st.set_page_config(
-    page_title= "BTC/USD Dashboard",
-    page_icon= ":material/currency_bitcoin:",
+    page_title="Live Crypto Trading Dashboard",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'https://www.extremelycoolapp.com/help',
-        'Report a bug': "https://www.extremelycoolapp.com/bug",
-        'About': "# This is a header. This is an *extremely* cool app!"
-    }
 )
 
-with st.container(key="app_title"):
-    st.title("BTCUSDT LIVE DASHBOARD")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+SYMBOL = "BTCUSDT"
+TIMEFRAMES = ["5m", "15m", "1h"]
+CANDLES_PER_DAY = {"5m": 288, "15m": 96, "1h": 24}
+MAX_CANDLES = 2000
+
+# =========================================================
+# LOAD DARK THEME CSS
+# =========================================================
+
+css_path = os.path.join(
+    os.path.dirname(__file__), "assets", "style.css"
+)
+
+if os.path.exists(css_path):
+    with open(css_path, encoding="utf-8") as file:
+        st.markdown(
+            f"<style>{file.read()}</style>",
+            unsafe_allow_html=True,
+        )
+
+
+# =========================================================
+# HELPER FUNCTIONS
+# =========================================================
+
+
+def show_connection_status(status):
+    """Display a floating WebSocket connection badge in the top-right corner."""
+
+    if isinstance(status, dict):
+        # Handle the actual dictionary returned by BinanceKlineFeed
+        if status.get("connected") is True:
+            status = "connected"
+        elif status.get("last_error"):
+            status = "error"
+        else:
+            status = (
+                status.get("status")
+                or status.get("state")
+                or status.get("connection_status")
+                or "disconnected"
+            )
+
+    status = str(status).strip().lower()
+
+    if status in ("connected", "open", "running"):
+        css_class = "connection-connected"
+        message = "WebSocket Connected"
+
+    elif status in ("connecting",):
+        css_class = "connection-disconnected"
+        message = "WebSocket Connecting..."
+
+    elif status in ("disconnected", "closed", "stopped"):
+        css_class = "connection-disconnected"
+        message = "WebSocket Disconnected"
+
+    else:
+        css_class = "connection-error"
+        message = "WebSocket Status Unavailable"
+
+    st.markdown(
+        f"""
+        <div class="connection-status {css_class}">
+            <span class="connection-dot"></span>
+            <span>{message}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def calculate_price_change(df, timeframe):
+    candles = CANDLES_PER_DAY[timeframe]
+
+    if len(df) <= candles:
+        previous_price = float(df["close"].iloc[0])
+    else:
+        previous_price = float(df["close"].iloc[-candles - 1])
+
+    current_price = float(df["close"].iloc[-1])
+
+    if previous_price == 0:
+        return 0.0
+
+    return (current_price / previous_price - 1) * 100
+
+def create_price_chart(
+    df,
+    show_cpr=True,
+    show_resistance=True,
+    show_support=True,
+    show_ema=True,
+):
+    fig = go.Figure()
+
+    # Candlestick chart
+    fig.add_trace(
+        go.Candlestick(
+            x=df["timestamp"],
+            open=df["open"],
+            high=df["high"],
+            low=df["low"],
+            close=df["close"],
+            name=SYMBOL,
+            increasing_line_color="#22c55e",
+            decreasing_line_color="#ef4444",
+        )
+    )
+
+    # CPR levels
+    if show_cpr:
+        for col, color in [
+            ("pivot", "#60a5fa"),
+            ("tc", "#a78bfa"),
+            ("bc", "#f59e0b"),
+        ]:
+            if col in df.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df["timestamp"],
+                        y=df[col],
+                        mode="lines",
+                        name=col.upper(),
+                        line=dict(
+                            color=color,
+                            width=1.2,
+                            dash="dot",
+                        ),
+                    )
+                )
+
+    # Resistance levels
+    if show_resistance:
+        for level in ["R1", "R2", "R3", "R4"]:
+            if level in df.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df["timestamp"],
+                        y=df[level],
+                        mode="lines",
+                        name=level,
+                        line=dict(
+                            color="#22c55e",
+                            width=1,
+                            dash="dot",
+                        ),
+                    )
+                )
+
+    # Support levels
+    if show_support:
+        for level in ["S1", "S2", "S3", "S4"]:
+            if level in df.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df["timestamp"],
+                        y=df[level],
+                        mode="lines",
+                        name=level,
+                        line=dict(
+                            color="#f87171",
+                            width=1,
+                            dash="dot",
+                        ),
+                    )
+                )
+
+
+    fig.update_layout(
+        title=f"{SYMBOL} Price Chart",
+        template="plotly_dark",
+        paper_bgcolor="#111827",
+        plot_bgcolor="#111827",
+        font=dict(color="#e2e8f0"),
+        height=600,
+        xaxis_title="Time",
+        yaxis_title="Price (USDT)",
+        xaxis_rangeslider_visible=False,
+        hovermode="x unified",
+        margin=dict(l=15, r=15, t=60, b=15),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
+    )
+
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(gridcolor="#263449", zeroline=False)
+
+    return fig
+
+def create_volume_chart(df):
+    colors = [
+        "#22c55e" if close >= open_price else "#ef4444"
+        for open_price, close in zip(df["open"], df["close"])
+    ]
+
+    fig = go.Figure(
+        go.Bar(
+            x=df["timestamp"],
+            y=df["volume"],
+            marker_color=colors,
+            name="Volume",
+        )
+    )
+
+    fig.update_layout(
+        title="Trading Volume",
+        template="plotly_dark",
+        paper_bgcolor="#111827",
+        plot_bgcolor="#111827",
+        font=dict(color="#e2e8f0"),
+        height=300,
+        xaxis_title="Time",
+        yaxis_title="Volume",
+        margin=dict(l=15, r=15, t=50, b=15),
+    )
+
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(gridcolor="#263449")
+
+    return fig
+
+def create_moving_average_chart(df):
+    fig = go.Figure()
+
+    # Closing price
+    fig.add_trace(
+        go.Scatter(
+            x=df["timestamp"],
+            y=df["close"],
+            mode="lines",
+            name="Close Price",
+            line=dict(color="#e2e8f0", width=1.5),
+        )
+    )
+
+    # EMA 20
+    if "ema_20" in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df["timestamp"],
+                y=df["ema_20"],
+                mode="lines",
+                name="EMA 20",
+                line=dict(color="#38bdf8", width=2),
+            )
+        )
+
+    # EMA 50
+    if "ema_50" in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df["timestamp"],
+                y=df["ema_50"],
+                mode="lines",
+                name="EMA 50",
+                line=dict(color="#f59e0b", width=2),
+            )
+        )
+
+    # SMA
+    if "sma" in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df["timestamp"],
+                y=df["sma"],
+                mode="lines",
+                name="SMA",
+                line=dict(color="#c084fc", width=2),
+            )
+        )
+
+    fig.update_layout(
+        title="Moving Average Analysis — EMA & SMA",
+        template="plotly_dark",
+        paper_bgcolor="#111827",
+        plot_bgcolor="#111827",
+        font=dict(color="#e2e8f0"),
+        height=420,
+        xaxis_title="Time",
+        yaxis_title="Price (USDT)",
+        hovermode="x unified",
+        margin=dict(l=15, r=15, t=60, b=15),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+        ),
+    )
+
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(gridcolor="#263449", zeroline=False)
+
+    return fig
+
+# def render_candle_summary(df):
+    latest = df.iloc[-1]
+
+    levels = [
+        ("Open", "open"),
+        ("High", "high"),
+        ("Low", "low"),
+        ("Close", "close"),
+        ("Pivot", "pivot"),
+        ("TC", "tc"),
+        ("BC", "bc"),
+        ("R1", "R1"),
+        ("R2", "R2"),
+        ("S1", "S1"),
+        ("S2", "S2"),
+    ]
+
+    items = []
+
+    for label, column in levels:
+        if column in df.columns and pd.notna(latest[column]):
+            items.append(
+                f"""
+                <div class="candle-chip">
+                    <span>{label}</span>
+                    <strong>{float(latest[column]):,.2f}</strong>
+                </div>
+                """
+            )
+
+    st.markdown(
+        '<div class="candle-strip">'
+        + "".join(items)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# =========================================================
 # SIDEBAR
-st.sidebar.title("Key Metrics")
-st.sidebar.markdown("---")
+# =========================================================
 
-timeframe = st.sidebar.selectbox("Timeframe", ["5m","15m", "1h"], index=0)
+st.sidebar.title("Dashboard Settings")
 
-state_key = f"price_df_{timeframe}"
-
-if state_key not in st.session_state:
-    df_api = get_data_from_api(timeframe)
-    st.session_state[state_key] = df_api
-    
-df = st.session_state[state_key]
-
-last_ts = df["timestamp"].iloc[-1]
-new_df = fetch_latest_candles(timeframe, last_ts)
-
-
-if new_df is not None:
-
-    df = pd.concat([df, new_df]) \
-           .drop_duplicates("timestamp") \
-           .sort_values("timestamp")
-
-    st.session_state.price_df = df
-
-# Dataframe 
-df = df.sort_values("timestamp")
-cpr_df = add_cpr_points(df)
-technical_df = add_technical_parameters(cpr_df)
-
-# Layout
-# st.subheader("Market Overview")
-live_price,trend = st.columns([1,1])
-
-
-symbol = st.sidebar.metric(
-    label = "Symbol",
-    value = "BTCUSDT"
+timeframe = st.sidebar.selectbox(
+    "Select Timeframe",
+    TIMEFRAMES,
+    index=0,
 )
 
-with live_price :
-    current_price = technical_df["close"].iloc[-1]
-    pct_change = technical_df["price_change_pct"].iloc[-1]
-    st.sidebar.metric(
-        label="Live Price",
-        value = f"${current_price:.2f}",
-        delta = f"{pct_change:.2f}",
-    )
+st.sidebar.markdown(f"**Symbol:** {SYMBOL}")
+st.sidebar.markdown("**Data Source:** Binance")
+st.sidebar.caption("Historical data: REST API")
+st.sidebar.caption("Live updates: WebSocket")
+st.sidebar.caption("Charts use the selected timeframe.")
 
-with trend:
-    st.sidebar.metric(
-        label = "Trend",
-        value = technical_df["trend"].iloc[-1]
-    )
- # # Prices
-with st.container(key="live_price_df"):
-    tab1, tab2 = st.tabs(["Live Data","Technical Indicators"])
-    with tab1:
-        data = df.iloc[-10:,:6]
-        styled_df = data.style.format({
-            col: "{:.2f}" for col in data.select_dtypes("number").columns
-        })
-        st.dataframe(styled_df, hide_index=True)
-    with tab2:
-    # Technical Indicators
-        st.dataframe(technical_df.iloc[:,[0]+ list(range(-5,0))].tail(10), hide_index=False)
-        
-st.markdown("---")
-st.subheader("Price Action")
-with st.container(key="price-action-options"):
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        show_cpr = st.checkbox("Pivot/CPR", value = True)
-    with col2:
-        show_r = st.checkbox("Resistance (R)", value = True)
-    with col3:
-        show_s = st.checkbox("Support (S)", value = True)
-        
-# CandleStick Chart
-candlestick = go.Candlestick(
-        x=technical_df['timestamp'],
-        open=technical_df['open'],
-        close = technical_df['close'],
-        high = technical_df['high'],
-        low = technical_df['low'],
-        name = "BTCUSDT"
-    )
+# =========================================================
+# SESSION STATE
+# =========================================================
 
-layout = go.Layout(title=f"Candlestick Chart for BTCUSDT", 
-                   xaxis=dict(title='5m Timestamp'),
-                   yaxis=dict(title='Price'))
-fig = go.Figure(data=[candlestick])
+if "df" not in st.session_state:
+    st.session_state.df = pd.DataFrame()
 
-# CPR levels
-if show_cpr:
-    pivot_levels = ["pivot", "tc", "bc"]
+if "feed" not in st.session_state:
+    st.session_state.feed = None
 
-    for level in pivot_levels:
-        fig.add_trace(go.Scatter(
-            x=technical_df["timestamp"],
-            y=technical_df[level],
-            mode="lines",
-            name=level,
-            line=dict(color="blue", dash="dot")
-        ))
+if "active_timeframe" not in st.session_state:
+    st.session_state.active_timeframe = None
 
-# Resistance levels
-if show_r:
-    res_levels = ["R1", "R2", "R3", "R4"]
+if "last_connection_id" not in st.session_state:
+    st.session_state.last_connection_id = None
 
-    for level in res_levels:
-        fig.add_trace(go.Scatter(
-            x=technical_df["timestamp"],
-            y=technical_df[level],
-            mode="lines",
-            name=level,
-            line=dict(color="green", dash="dot")
-        ))
 
-# Supports levels
-if show_s:
-    sup_levels = ["S1", "S2", "S3", "S4"]
+# =========================================================
+# INITIALIZE DATA AND WEBSOCKET
+# =========================================================
 
-    for level in sup_levels:
-        fig.add_trace(go.Scatter(
-            x=technical_df["timestamp"],
-            y=technical_df[level],
-            mode="lines",
-            name=level,
-            line=dict(color="red", dash="dot")
-        ))
+if st.session_state.active_timeframe != timeframe:
+    old_feed = st.session_state.feed
 
-# CPR Levels
-latest = technical_df.iloc[-1]
-st.markdown(f"""
-<div class="cpr-strip">
-    <div style="color:var(--sub-text); font-size:13px; margin-bottom:6px;">
-        CPR INDICATORS
+    if old_feed is not None:
+        try:
+            old_feed.stop()
+        except Exception:
+            logger.exception("Could not stop previous feed")
+
+    try:
+        with st.spinner("Loading historical candles..."):
+            initial_df = get_data_from_api(
+                symbol=SYMBOL,
+                interval=timeframe,
+                days=7,
+            )
+
+        if initial_df is None or initial_df.empty:
+            st.session_state.df = pd.DataFrame()
+        else:
+            st.session_state.df = (
+                initial_df.tail(MAX_CANDLES).reset_index(drop=True)
+            )
+
+        feed = BinanceKlineFeed(
+            symbol=SYMBOL,
+            interval=timeframe,
+        )
+        feed.start()
+
+        st.session_state.feed = feed
+        st.session_state.active_timeframe = timeframe
+        st.session_state.last_connection_id = None
+
+    except Exception as exc:
+        logger.exception("Initialization failed")
+        st.error(f"Unable to initialize dashboard: {exc}")
+        st.stop()
+
+
+# =========================================================
+# DASHBOARD HEADER
+# =========================================================
+
+st.markdown(
+    """
+    <div class="dashboard-header">
+        <div class="eyebrow">LIVE MARKET MONITORING</div>
+        <h1>📈 Live Crypto Trading Dashboard</h1>
+        <p>
+            Real-time BTCUSDT price action, technical indicators,
+            support/resistance levels and market data.
+        </p>
     </div>
-    <div style="display:flex; gap:12px; flex-wrap:wrap; font-weight:500;">
-        <span style="color:#3da5ff">P: {latest['pivot']:.2f}</span>
-        <span style="color:#3da5ff">TC: {latest['tc']:.2f}</span>
-        <span style="color:#3da5ff">BC: {latest['bc']:.2f}</span>
-        <span style="color:#00e676">R1: {latest['R1']:.2f}</span>
-        <span style="color:#00e676">R2: {latest['R2']:.2f}</span>
-        <span style="color:#00e676">R3: {latest['R3']:.2f}</span>
-        <span style="color:#00e676">R4: {latest['R4']:.2f}</span>
-        <span style="color:#ff5252">S1: {latest['S1']:.2f}</span>
-        <span style="color:#ff5252">S2: {latest['S2']:.2f}</span>
-        <span style="color:#ff5252">S3: {latest['S3']:.2f}</span>
-        <span style="color:#ff5252">S4: {latest['S4']:.2f}</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("#### Candlestick Chart for BTCUSDT")
-
-fig.update_layout(
-    xaxis_title="5M Timestamp",
-    yaxis_title="Price",
-    xaxis_rangeslider_visible=False,
-    template="plotly_dark",
-    paper_bgcolor="#2C2B2B",
-    plot_bgcolor="#232323",
-    font=dict(color="#dddddd"),
-    margin=dict(l=20, r=20, t=40, b=20),
-    hovermode="x unified", 
+    """,
+    unsafe_allow_html=True,
 )
-keep_hover=["pivot", "tc", "bc"]
-for trace in fig.data:
-    if trace.name not in keep_hover:
-        trace.hoverinfo = "skip"
+
+st.divider()
+
+
+# =========================================================
+# LIVE DASHBOARD
+# =========================================================
+
+@st.fragment(run_every="5s")
+def live_dashboard():
+
+    feed = st.session_state.feed
+
+    if feed is None:
+        show_connection_status("disconnected")
+        st.caption("WebSocket feed is not initialized.")
+        return
+
+    # ---------------- CONNECTION STATUS ----------------
+    print("Status:", feed.get_status())
+    try:
+        status = feed.get_status()
+    except Exception:
+        logger.exception("Unable to read WebSocket status")
+        status = "error"
+
+    show_connection_status(status)
+
+    # Normalize status and extract reconnect ID if available.
+    if isinstance(status, dict):
+        connection_id = status.get("connection_id")
+    else:
+        connection_id = None
+
+    # ---------------- RECOVER MISSED CANDLES ----------------
+
+    if (
+        connection_id is not None
+        and connection_id != st.session_state.last_connection_id
+        and not st.session_state.df.empty
+    ):
+        try:
+            last_timestamp = st.session_state.df["timestamp"].iloc[-1]
+
+            recovered = fetch_latest_candles(
+                symbol=SYMBOL,
+                interval=timeframe,
+                last_timestamp=last_timestamp,
+            )
+
+            if recovered is not None and not recovered.empty:
+                st.session_state.df = merge_candles(
+                    st.session_state.df,
+                    recovered,
+                )
+
+            st.session_state.last_connection_id = connection_id
+
+        except Exception:
+            logger.exception("Could not recover missed candles")
+
+    # ---------------- PROCESS WEBSOCKET EVENTS ----------------
+
+    try:
+        events = feed.get_events()
+    except Exception:
+        logger.exception("Unable to read WebSocket events")
+        events = []
+
+    for event in events or []:
+        try:
+            st.session_state.df = update_candle(
+                st.session_state.df,
+                event,
+            )
+        except Exception:
+            logger.exception("Candle update failed")
+
+    df = st.session_state.df
+
+    if df is None or df.empty:
+        st.info("Waiting for market data...")
+        return
+
+    df = df.tail(MAX_CANDLES).reset_index(drop=True)
+    st.session_state.df = df
+
+    # ---------------- TECHNICAL INDICATORS ----------------
+
+    try:
+        technical_df = add_technical_parameters(
+            add_cpr_points(df.copy())
+        )
+    except Exception:
+        logger.exception("Indicator calculation failed")
+        technical_df = df.copy()
+
+    # ---------------- METRICS ----------------
+
+    current_price = float(df["close"].iloc[-1])
+    latest_volume = float(df["volume"].iloc[-1])
+
+    candles_24h = min(CANDLES_PER_DAY[timeframe], len(df))
+
+    high_24h = float(df["high"].tail(candles_24h).max())
+    low_24h = float(df["low"].tail(candles_24h).min())
+
+    price_change = calculate_price_change(df, timeframe)
+
+    # Compact, equal-width metric cards.
+    columns = st.columns(5, gap="small")
+
+    columns[0].metric(
+        "Current Price",
+        f"${current_price:,.2f}",
+    )
+
+    columns[1].metric(
+        "24H High*",
+        f"${high_24h:,.2f}",
+    )
+
+    columns[2].metric(
+        "24H Low*",
+        f"${low_24h:,.2f}",
+    )
+
+    columns[3].metric(
+        "Latest Candle Volume",
+        f"{latest_volume:,.2f}",
+    )
+
+    columns[4].metric(
+        "Candles Loaded",
+        f"{len(df):,}",
+    )
+
+    st.caption(
+        f"Approx. price change: {price_change:+.2f}% | "
+        "*High/low are based on candles currently loaded."
+    )
+
+    # =====================================================
+    # TWO MAIN TABS
+    # =====================================================
+
+    charts_tab, data_tab = st.tabs(
+        ["📊 Charts", "🧾 Dataframes"]
+    )
+
+    # =====================================================
+    # TAB 1 — CHARTS
+    # =====================================================
+
+    with charts_tab:
+
+        st.subheader("Price Chart Controls")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        show_cpr = col1.checkbox(
+            "Show CPR",
+            value=True,
+            key=f"cpr_{timeframe}",
+        )
+
+        show_resistance = col2.checkbox(
+            "Show Resistance",
+            value=True,
+            key=f"resistance_{timeframe}",
+        )
+
+        show_support = col3.checkbox(
+            "Show Support",
+            value=True,
+            key=f"support_{timeframe}",
+        )
+
+        show_ema = col4.checkbox(
+            "Show Moving Averages",
+            value=True,
+            key=f"ema_{timeframe}",
+        )
+
+        st.subheader("BTCUSDT Price Action")
+
+        price_fig = create_price_chart(
+            technical_df,
+            show_cpr=show_cpr,
+            show_resistance=show_resistance,
+            show_support=show_support,
+            show_ema=show_ema,
+        )
+
+        st.plotly_chart(
+            price_fig,
+            key=f"price_chart_{timeframe}",
+        )
+
         
-fig.update_xaxes(showgrid=False)
-fig.update_yaxes(gridcolor="#333333")
-st.plotly_chart(fig, use_container_width=True)
+        st.subheader("EMA & SMA Analysis")
+
+        ma_fig = create_moving_average_chart(technical_df)
+
+        st.plotly_chart(
+            ma_fig,
+            key=f"moving_average_chart_{timeframe}",
+        )
+
+        st.subheader("Trading Volume")
+
+        volume_fig = create_volume_chart(df)
+
+        st.plotly_chart(
+            volume_fig,
+            key=f"volume_chart_{timeframe}",
+        )
+
+        # st.subheader("Latest Candle Snapshot")
+        # render_candle_summary(technical_df)
+
+    # =====================================================
+    # TAB 2 — DATAFRAMES
+    # =====================================================
+
+    with data_tab:
+
+        st.subheader("Latest 100 Candles")
+
+        latest_data = technical_df.tail(100).sort_values(
+            "timestamp",
+            ascending=False,
+        )
+
+        st.dataframe(
+            latest_data,
+            hide_index=True,
+        )
+
+        st.divider()
+
+        st.subheader("Complete Loaded Dataset")
+
+        st.caption(
+            f"{len(technical_df):,} candles currently retained in memory."
+        )
+
+        full_data = technical_df.sort_values(
+            "timestamp",
+            ascending=False,
+        )
+
+        st.dataframe(
+            full_data,
+            hide_index=True,
+        )
+
+        csv_data = full_data.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            "Download Data as CSV",
+            data=csv_data,
+            file_name=f"{SYMBOL}_{timeframe}_candles.csv",
+            mime="text/csv",
+            key=f"download_{timeframe}",
+        )
 
 
-fig = make_subplots(
-    rows=2,
-    cols=1,
-    shared_xaxes=True,
-    vertical_spacing=0.06,
-    row_heights=[0.7, 0.3],
-    subplot_titles=("Price Action", "RSI (14)")
-)
+live_dashboard()
 
+# =========================================================
+# SIDEBAR FOOTER
+# =========================================================
 
-fig.add_trace(go.Candlestick(
-    x=technical_df["timestamp"],
-    open=technical_df["open"],
-    high=technical_df["high"],
-    low=technical_df["low"],
-    close=technical_df["close"],
-    name="BTCUSDT",
-    increasing_line_color="#00e676",
-    decreasing_line_color="#ff5252"
-), row=1, col=1)
-
-# Candlestick for Technical Analysis for BTCUSDT
-# Moving Averages
-
-fig.add_trace(go.Scatter(
-    x=technical_df["timestamp"],
-    y=technical_df["ema_20"],
-    mode="lines",
-    name="EMA 20",
-    line=dict(color="#00c2ff", width=1.5)
-), row=1, col=1)
-
-fig.add_trace(go.Scatter(
-    x=technical_df["timestamp"],
-    y=technical_df["ema_50"],
-    mode="lines",
-    name="EMA 50",
-    line=dict(color="#f49f17", width=1.5)
-), row=1, col=1)
-
-fig.add_trace(go.Scatter(
-    x=technical_df["timestamp"],
-    y=technical_df["sma"],
-    mode="lines",
-    name="SMA",
-    line=dict(color="#9c27b0", width=1.3, dash="dot")
-), row=1, col=1)
-
-# RSI
-fig.add_trace(go.Scatter(
-    x=technical_df["timestamp"],
-    y=technical_df["rsi"],
-    mode="lines",
-    name="RSI",
-    line=dict(color="#ffffff", width=1.5)
-), row=2, col=1)
-
-# RSI Overbought / Oversold Lines
-fig.add_hline(
-    y=70,
-    line_dash="dash",
-    line_color="#ff5252",
-    annotation_text="Overbought",
-    annotation_position="top right",
-    row=2,
-    col=1
-)
-
-fig.add_hline(
-    y=30,
-    line_dash="dash",
-    line_color="#00e676",
-    annotation_text="Oversold",
-    annotation_position="bottom right",
-    row=2,
-    col=1
-)
-
-# Optional RSI background zone
-fig.add_hrect(
-    y0=30, y1=70,
-    fillcolor="rgba(255,255,255,0.03)",
-    line_width=0,
-    row=2, col=1
-)
-
-# Layout Styling
-st.markdown("#### BTCUSDT Technical Analysis")
-fig.update_layout(
-    template="plotly_dark",
-    paper_bgcolor="#2C2B2B",
-    plot_bgcolor="#232323",
-    font=dict(color="#979797"),
-    margin=dict(l=20, r=20, t=60, b=30),
-    hovermode="x unified",
-)
-
-fig.update_xaxes(
-    showgrid=False,
-    rangeslider_visible=False
-)
-
-fig.update_yaxes(
-    gridcolor="#333333"
-)
-
-st.plotly_chart(fig, use_container_width=True)
-# Signal Trends
-# technical_df = generate_signals(technical_df)
-# st.write(technical_df.tail(10))
-# st.write(technical_df[technical_df["final_signal"]== "SELL"])
-# latest = technical_df.iloc[-1]
-
-# if latest["final_signal"] == "BUY":
-#     st.success("🚨 BUY SIGNAL TRIGGERED")
-
-# elif latest["final_signal"] == "SELL":
-#     st.error("🚨 SELL SIGNAL TRIGGERED")
+st.sidebar.divider()
+st.sidebar.caption("Binance market data")
+st.sidebar.caption("Historical candles via REST API")
+st.sidebar.caption("Live updates via WebSocket")
+st.sidebar.caption("For educational purposes only.")

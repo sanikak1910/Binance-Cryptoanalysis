@@ -1,242 +1,376 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Wendy+One&display=swap');
-/* =====================================
-   ROOT APP
-=====================================*/
-:root{
-    --text-color:#DAA520;
-    --dark-bg:#212121;
-    --sidebar-bg:#323232;
-    --text-font:"Fira Sans", sans-serif;
-    --sub-text:#dddddd;
-}
-.stApp {
-    background: var(--dark-bg);
-    font-family: "Wendy One", sans-serif;
-    color: 	var(--text-color);
-}
-.stAppHeader{
-    background-color: var(--dark-bg);
+/* =====================================================
+   LIVE CRYPTO DASHBOARD - DARK THEME
+   ===================================================== */
+
+:root {
+    --bg-main: #0b1120;
+    --bg-panel: #111827;
+    --bg-card: #172338;
+    --border: #263449;
+    --text-main: #e8eef8;
+    --text-muted: #94a3b8;
+    --accent: #38bdf8;
 }
 
-/* Global container polish */
-.block-container {
-    padding-top: 0.5rem;
-    max-width: 92%;
-}
-[data-testid="stMarkdownContainer"] hr {
-    margin:-5px 0 10px 0;
+/* Main application */
+
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"] {
+    background: var(--bg-main) !important;
+    color: var(--text-main) !important;
 }
 
-/* =====================================
-   SIDEBAR
-=====================================*/
-
-[data-testid="stAppToolbar"] {
-    background: #3766c5;
+[data-testid="stHeader"] {
+    background: transparent !important;
 }
+
+[data-testid="stMainBlockContainer"] {
+    max-width: 1600px;
+    padding-top: 1.5rem;
+    padding-bottom: 2.5rem;
+}
+
+/* Sidebar */
 
 [data-testid="stSidebar"] {
-    background-color: var(--sidebar-bg);
-    font-family: var(--text-font);
-    padding:0 4px;
-    border-right: 1px solid #444;
-    box-shadow: 3px 0px 10px rgba(0,0,0,0.4);
-    scroll-behavior: smooth;
-}
-.stElementContainer h1{
-    margin-top:-15px;
-    font-size:22px;
-    color:var(--text-color);
-}
-.stElementContainer p{
-    font-size:14px;
-    color:var(--text-color);
-}
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] hr {
-    margin:-5px 0 20px 0;
+    background: #0f172a !important;
+    border-right: 1px solid var(--border);
 }
 
-.stSelectbox > div > div{
-    border:1px solid #4d4d4d;
-    box-shadow: 0 2px 5px #3b3b3bc5;
-    background-color: var(--sidebar-bg);
-}  
+[data-testid="stSidebar"] * {
+    color: var(--text-main);
+}
 
-/* KPI METRICS */
+/* Headings and text */
+
+h1,
+h2,
+h3 {
+    color: #f8fafc !important;
+}
+
+p {
+    color: var(--text-main);
+}
+
+[data-testid="stCaptionContainer"] {
+    color: var(--text-muted);
+}
+
+/* Dashboard heading */
+
+.dashboard-header {
+    padding: 4px 0 12px;
+}
+
+.dashboard-header .eyebrow {
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+}
+
+.dashboard-header h1 {
+    color: #f8fafc !important;
+    font-size: clamp(25px, 3vw, 38px);
+    font-weight: 800;
+    letter-spacing: -0.8px;
+    margin: 0;
+}
+
+.dashboard-header p {
+    color: var(--text-muted);
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+/* =====================================================
+   COMPACT METRIC CARDS
+   ===================================================== */
 
 [data-testid="stMetric"] {
-    border-radius: 8px;
-    border:1px solid #4d4d4d;
-    box-shadow: 0 2px 5px #3b3b3bc5;
-    padding:10px;
-}
+    box-sizing: border-box;
 
-[data-testid="stMetricValue"]  {
-    color:var(--sub-text);
-    font-size:22px;
-    font-weight: bold;
-    margin:2px 0;
-}
-[data-testid="stMetricDelta"]  {
-    font-weight:bold;
-}
+    height: 94px;
+    min-height: 94px;
 
-/* Page Title */
+    padding: 12px 14px !important;
 
-div.st-key-app_title div.stHeading h1{
-    color: var(--text-color);
-    text-align: center;
-    font-family: var(--text-font);
-    font-size: 30px;
-}
-/* tabs */
-[data-baseweb="tab-highlight"] {
-    background-color: var(--text-color);
-    transition: all 0.3s ease-in-out;
-}
-[data-baseweb="tab-list"] [aria-selected="true"]{
-    color:var(--text-color);
-    transition: color 0.3s ease-in-out;
-}
-[data-baseweb="tab"] p {
-    padding:0 10px;
-    transition: all 0.3s ease;
-}
-[data-baseweb="tab"]:hover{
-    background-color:var(--text-color);
-    color:var(--sub-text);
-    transform: translateY(-2px);
-    transition: all 0.25s ease-in-out;
-}
-[data-baseweb="tab"] {
-    transition: 
-        background-color 0.3s ease,
-        color 0.3s ease,
-        transform 0.2s ease;
-}
-/* DATAFRAMES */
+    background: linear-gradient(
+        145deg,
+        #172338,
+        #111b2d
+    ) !important;
 
-[data-testid="stDataFrame"] > div > div{
+    border: 1px solid #2b374b;
+    border-radius: 11px;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+
     overflow: hidden;
-    padding: 10px 0;
-    border-radius: 0px;
+    box-shadow: none !important;
 }
 
-/* HEADERS */
-
-.stHeading h3{
-    color: var(--sub-text);
-    font-family: "Fira Sans", sans-serif;
-    font-size : 20px;
-    padding:0 15px;
-    margin:20px 0 0 0;
-}
-[data-testid="stMarkdownContainer"] h4{
-    color: var(--sub-text);
-    font-family: "Fira Sans", sans-serif;
-    font-size : 18px;
-    padding:0 15px;
-    margin:20px 15px;
-}
-/* Checkbox */
-div.st-key-price-action-options{
-    padding:5px 20px;
-}
-div.st-key-price-action-options span{
-    background-color: var(--text-color);
-}
-
-div.st-key-price-action-options input[type="checkbox"] {
-    color: var(--sub-text);
-    transform: scale(1.1);
-}
-
-div.st-key-price-action-options p {
-    font-weight: 500;
-    color:var(--sub-text)
-}
-
-/* CPR STRIP */
-.cpr-strip {
-    padding: 12px 18px;
-}
-
-span[style*="blue"] {
-    text-shadow: 0 0 2px rgba(0,150,255,0.5);
-}
-
-span[style*="green"] {
-    text-shadow: 0 0 2px rgba(0,255,120,0.5);
-}
-
-span[style*="red"] {
-    text-shadow: 0 0 2px rgba(255,60,60,0.5);
-}
-
-/* Plotly Chart Container */
-/* Remove internal plot scrolling */
-[data-testid="stPlotlyChart"] {
-    overflow: hidden !important;
-}
-
-/* Remove extra vertical scroll in app */
-html, body {
-    overflow-x: hidden;
-}
-
-/* Give plot proper height */
-.js-plotly-plot {
-    height: 80vh !important;   /* adjust if needed */
-}
-.js-plotly-plot{
-    padding: 15px 20px;
-    border-radius: 14px;
-    border: 1px solid #3a3a3a;
-    background: #2C2B2B;
-    box-shadow: 0 0 5px rgba(0,0,0,0.45);
-}
-.js-plotly-plot > div{
-    margin-bottom: 25px;
-    overflow:scroll;
-}
-[data-testid="stPlotlyChart"] {
-    animation: fadeChart 0.5s ease-in;
-}
-
-@keyframes fadeChart {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-.js-plotly-plot .legend text {
+[data-testid="stMetricLabel"] {
+    color: #94a3b8 !important;
     font-size: 12px !important;
-    fill: #dddddd !important;
+    font-weight: 500 !important;
+    margin-bottom: 4px !important;
 }
 
-.js-plotly-plot .legend{
-    background-color: rgba(0,0,0,0.3) !important;
-}
-/* Smooth UI */
-
-* {
-    transition: all 0.18s ease;
-}
-::-webkit-scrollbar {
-    width: 6px;
+[data-testid="stMetricValue"] {
+    color: #f8fafc !important;
+    font-size: clamp(15px, 1.4vw, 22px) !important;
+    font-weight: 750 !important;
+    line-height: 1.2 !important;
 }
 
-::-webkit-scrollbar-track {
-    background: #2a2a2a;
+[data-testid="stMetricDelta"] {
+    font-size: 11px !important;
+    margin-top: 3px !important;
 }
 
-::-webkit-scrollbar-thumb {
-    background: var(--text-color);
-    border-radius: 6px;
-}
-.stApp {
-    animation: fadeIn 0.6s ease-in;
+[data-testid="stMetric"]:hover {
+    border-color: #3b82f6;
+    transform: none;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+/* =====================================================
+   FLOATING WEBSOCKET STATUS BADGE
+   ===================================================== */
+
+.connection-status {
+    position: fixed;
+
+    top: 68px;
+    right: 24px;
+
+    z-index: 999999;
+
+    padding: 7px 12px;
+
+    border-radius: 18px;
+
+    font-size: 11px;
+    font-weight: 700;
+
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+
+    backdrop-filter: blur(10px);
+
+    pointer-events: none;
+}
+
+/* Connected */
+
+.connection-connected {
+    background: rgba(22, 101, 52, 0.92);
+    border: 1px solid rgba(74, 222, 128, 0.45);
+    color: #bbf7d0;
+}
+
+/* Disconnected */
+
+.connection-disconnected {
+    background: rgba(124, 45, 18, 0.92);
+    border: 1px solid rgba(251, 146, 60, 0.5);
+    color: #fed7aa;
+}
+
+/* Error */
+
+.connection-error {
+    background: rgba(127, 29, 29, 0.92);
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    color: #fecaca;
+}
+
+/* Status dot */
+
+.connection-dot {
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.connection-connected .connection-dot {
+    background: #4ade80;
+    box-shadow: 0 0 7px rgba(74, 222, 128, 0.8);
+}
+
+.connection-disconnected .connection-dot {
+    background: #fb923c;
+}
+
+.connection-error .connection-dot {
+    background: #f87171;
+}
+
+/* =====================================================
+   TABS
+   ===================================================== */
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.stTabs [data-baseweb="tab"] {
+    background: #111827;
+    border: 1px solid #263449;
+    border-radius: 8px 8px 0 0;
+
+    padding: 10px 18px;
+
+    color: #94a3b8;
+}
+
+.stTabs [aria-selected="true"] {
+    background: #172338 !important;
+    color: #38bdf8 !important;
+    border-bottom: 2px solid #38bdf8 !important;
+}
+
+/* =====================================================
+   CHARTS
+   ===================================================== */
+
+[data-testid="stPlotlyChart"] {
+    background: #111827;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 5px;
+}
+
+/* =====================================================
+   DATAFRAMES
+   ===================================================== */
+
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* =====================================================
+   INPUTS AND SELECTORS
+   ===================================================== */
+
+div[data-baseweb="select"] > div,
+div[data-baseweb="input"] > div {
+    background: #172338 !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+    border-radius: 8px !important;
+}
+
+/* =====================================================
+   CANDLE SUMMARY CHIPS
+   ===================================================== */
+
+.candle-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    background: #111827;
+
+    border: 1px solid var(--border);
+    border-radius: 10px;
+
+    padding: 12px;
+    margin: 8px 0 18px;
+}
+
+.candle-chip {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    background: #172338;
+
+    border: 1px solid #263449;
+    border-radius: 7px;
+
+    padding: 8px 11px;
+
+    min-width: 82px;
+}
+
+.candle-chip span {
+    color: #94a3b8;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.candle-chip strong {
+    color: #e2e8f0;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* =====================================================
+   CSV DOWNLOAD BUTTON
+   ===================================================== */
+
+.stDownloadButton button {
+    background: #0e7490 !important;
+    border: 1px solid #155e75 !important;
+    color: #ecfeff !important;
+    border-radius: 8px !important;
+    font-weight: 600;
+}
+
+.stDownloadButton button:hover {
+    background: #0891b2 !important;
+    color: white !important;
+}
+
+/* =====================================================
+   DIVIDERS
+   ===================================================== */
+
+.st-emotion-cache-s4bvyn hr{
+    border-color: #263449 !important;
+    margin: 0 0 0 0px
+}
+
+/* =====================================================
+   RESPONSIVE LAYOUT
+   ===================================================== */
+
+@media (max-width: 768px) {
+    [data-testid="stMetric"] {
+        height: 84px;
+        min-height: 84px;
+        padding: 9px !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 15px !important;
+    }
+
+    .connection-status {
+        top: 52px;
+        right: 10px;
+        font-size: 10px;
+        padding: 6px 9px;
+    }
+
+    .dashboard-header h1 {
+        padding-right: 5px;
+    }
 }
