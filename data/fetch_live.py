@@ -1,101 +1,289 @@
-from binance.client import Client
+from datetime import datetime
+
 import pandas as pd
-from datetime import datetime, timedelta, timezone
-
-# -----------------------------
-# Initialize Binance Client
-# (No API key required for public data)
-# -----------------------------
-client = Client()
-
-# -----------------------------
-# Interval Map
-# -----------------------------
-INTERVAL_MAP = {
-    "5m": Client.KLINE_INTERVAL_5MINUTE,
-    "15m": Client.KLINE_INTERVAL_15MINUTE,
-    "1h": Client.KLINE_INTERVAL_1HOUR
-}
-
-# -----------------------------
-# Get 7 days historical data
-# -----------------------------
-def get_data_from_api(timeframe):
-
-    end_time = datetime.now(timezone.utc)
-    start_time = end_time - timedelta(days=7)
-
-    start_ms = int(start_time.timestamp() * 1000)
-    end_ms = int(end_time.timestamp() * 1000)
-
-    all_klines = []
-    limit = 1000
-    fetch_start = start_ms
-
-    while True:
-        klines = client.get_klines(
-            symbol="BTCUSDT",
-            interval=INTERVAL_MAP[timeframe],
-            startTime=fetch_start,
-            endTime=end_ms,
-            limit=limit
-        )
-
-        if not klines:
-            break
-
-        all_klines.extend(klines)
-        last_open_time = klines[-1][0]
-
-        # Move forward to avoid duplicates
-        fetch_start = last_open_time + 1
-
-        if last_open_time >= end_ms:
-            break
-
-    return klines_to_df(all_klines)
+from binance.client import Client
 
 
-# -----------------------------
-# Fetch new candles after last timestamp
-# -----------------------------
-def fetch_latest_candles(timeframe, last_ts):
+TIMEZONE = "Asia/Kolkata"
 
-    start_ms = int(last_ts.timestamp() * 1000) + 1
+CANDLE_COLUMNS = [
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+]
 
-    klines = client.get_historical_klines(
-        symbol="BTCUSDT",
-        interval=INTERVAL_MAP[timeframe],
-        start_str=start_ms
-    )
+
+def get_binance_client():
+    """
+    Create a Binance client.
+
+    Public market data does not require API keys.
+    """
+    return Client()
+
+
+def klines_to_df(klines):
+    """
+    Convert Binance REST kline data into a DataFrame.
+
+    Binance kline fields:
+    0: open time
+    1: open
+    2: high
+    3: low
+    4: close
+    5: volume
+    """
 
     if not klines:
-        return None
+        return pd.DataFrame(columns=CANDLE_COLUMNS)
+
+    df = pd.DataFrame(
+        klines,
+        columns=[
+            "open_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "close_time",
+            "quote_asset_volume",
+            "number_of_trades",
+            "taker_buy_base_asset_volume",
+            "taker_buy_quote_asset_volume",
+            "ignore",
+        ],
+    )
+
+    df = df[
+        [
+            "open_time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+        ]
+    ].copy()
+
+    df.rename(
+        columns={"open_time": "timestamp"},
+        inplace=True,
+    )
+
+    # Convert Binance UTC milliseconds to India time.
+    df["timestamp"] = pd.to_datetime(
+        df["timestamp"],
+        unit="ms",
+        utc=True,
+    )
+
+    df["timestamp"] = (
+        df["timestamp"]
+        .dt.tz_convert(TIMEZONE)
+        .dt.tz_localize(None)
+    )
+
+    numeric_columns = [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
+
+    for column in numeric_columns:
+        df[column] = pd.to_numeric(
+            df[column],
+            errors="coerce",
+        )
+
+    df = df.dropna(subset=CANDLE_COLUMNS)
+
+    df = (
+        df.sort_values("timestamp")
+        .drop_duplicates(subset=["timestamp"], keep="last")
+        .reset_index(drop=True)
+    )
+
+    return df[CANDLE_COLUMNS]
+
+
+def get_data_from_api(
+    symbol="BTCUSDT",
+    interval="5m",
+    days=7,
+):
+    """
+    Fetch historical candles from Binance REST API.
+    """
+
+    client = get_binance_client()
+
+    start_str = f"{days} days ago UTC"
+
+    klines = client.get_historical_klines(
+        symbol=symbol,
+        interval=interval,
+        start_str=start_str,
+    )
 
     return klines_to_df(klines)
 
 
-# -----------------------------
-# Convert Klines to DataFrame
-# -----------------------------
-def klines_to_df(klines):
+def update_candle(df, candle):
+    """
+    Update an existing candle or append a new candle from WebSocket data.
 
-    df_sample = pd.DataFrame(klines, columns=[
-        'timestamp', 'open', 'high', 'low', 'close', 'volume',
-        'close_time', 'quote_asset_volume', 'num_trades',
-        'taker_buy_base', 'taker_buy_quote', 'ignore'
-    ])
+    candle format:
+    {
+        "timestamp": Binance UTC timestamp in milliseconds,
+        "open": float,
+        "high": float,
+        "low": float,
+        "close": float,
+        "volume": float,
+        "is_closed": bool
+    }
+    """
 
-    df_sample = df_sample.iloc[:, :6]
+    if df is None or df.empty:
+        df = pd.DataFrame(columns=CANDLE_COLUMNS)
 
-    df_sample['timestamp'] = (
-        pd.to_datetime(df_sample['timestamp'], unit='ms')
-        .dt.tz_localize('UTC')
-        .dt.tz_convert('Asia/Kolkata')
-        .dt.tz_localize(None)
+    df = df.copy()
+
+    candle_timestamp = pd.to_datetime(
+        candle["timestamp"],
+        unit="ms",
+        utc=True,
     )
 
-    df_sample[['open', 'close', 'low', 'high', 'volume']] = \
-        df_sample[['open', 'close', 'low', 'high', 'volume']].astype(float)
+    candle_timestamp = (
+        candle_timestamp
+        .tz_convert(TIMEZONE)
+        .tz_localize(None)
+    )
 
-    return df_sample
+    new_row = {
+        "timestamp": candle_timestamp,
+        "open": float(candle["open"]),
+        "high": float(candle["high"]),
+        "low": float(candle["low"]),
+        "close": float(candle["close"]),
+        "volume": float(candle["volume"]),
+    }
+
+    if df.empty:
+        df = pd.DataFrame([new_row])
+
+    else:
+        matching_rows = (
+            df["timestamp"] == candle_timestamp
+        )
+
+        if matching_rows.any():
+            # Replace the current candle with the latest WebSocket values.
+            df.loc[matching_rows, CANDLE_COLUMNS] = [
+                new_row[column]
+                for column in CANDLE_COLUMNS
+            ]
+
+        else:
+            # A new candle has started.
+            df = pd.concat(
+                [
+                    df,
+                    pd.DataFrame([new_row]),
+                ],
+                ignore_index=True,
+            )
+
+    df = (
+        df.sort_values("timestamp")
+        .drop_duplicates(subset=["timestamp"], keep="last")
+        .reset_index(drop=True)
+    )
+
+    return df[CANDLE_COLUMNS]
+
+
+def merge_candles(existing_df, new_df):
+    """
+    Merge REST recovery candles with existing dashboard data.
+    """
+
+    if existing_df is None or existing_df.empty:
+        if new_df is None or new_df.empty:
+            return pd.DataFrame(columns=CANDLE_COLUMNS)
+
+        return new_df[CANDLE_COLUMNS].copy()
+
+    if new_df is None or new_df.empty:
+        return existing_df[CANDLE_COLUMNS].copy()
+
+    merged = pd.concat(
+        [
+            existing_df[CANDLE_COLUMNS],
+            new_df[CANDLE_COLUMNS],
+        ],
+        ignore_index=True,
+    )
+
+    merged = (
+        merged.sort_values("timestamp")
+        .drop_duplicates(subset=["timestamp"], keep="last")
+        .reset_index(drop=True)
+    )
+
+    return merged[CANDLE_COLUMNS]
+
+
+def fetch_latest_candles(
+    symbol,
+    interval,
+    last_timestamp,
+    limit=1000,
+):
+    """
+    Fetch candles after last_timestamp for recovery.
+
+    last_timestamp is expected to be timezone-naive India time,
+    matching the timestamp column in the dashboard DataFrame.
+    """
+
+    if last_timestamp is None:
+        return pd.DataFrame(columns=CANDLE_COLUMNS)
+
+    timestamp = pd.Timestamp(last_timestamp)
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize(TIMEZONE)
+    else:
+        timestamp = timestamp.tz_convert(TIMEZONE)
+
+    # Convert to UTC milliseconds for Binance.
+    start_time_ms = (
+        timestamp
+        .tz_convert("UTC")
+        .timestamp()
+        * 1000
+    )
+
+    # Start slightly after the last known candle open time.
+    start_time_ms = int(start_time_ms) + 1
+
+    client = get_binance_client()
+
+    klines = client.get_klines(
+        symbol=symbol,
+        interval=interval,
+        startTime=start_time_ms,
+        limit=limit,
+    )
+
+    return klines_to_df(klines)
+

@@ -123,7 +123,7 @@ def add_technical_parameters(cpr_df):
     cpr_df['ema_50'] = cpr_df['close'].ewm(span=50).mean()
     
     # Simple Moving Average (SMA)
-    days = 5
+    days = 5 * 288
     cpr_df['sma'] = cpr_df['close'].rolling(days).mean()
     
     # RSI (0-100)(Overbought/Oversold)
